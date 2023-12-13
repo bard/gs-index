@@ -37,6 +37,7 @@ pub struct Event {
     pub chain_id: i32,
     pub address: String,
     pub block_number: i32,
+    pub log_index: i32,
     pub payload: EventPayload,
 }
 
@@ -159,6 +160,7 @@ mod tests {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
+            log_index: 1,
             payload: EventPayload::ProjectCreated {
                 project_id: "proj-123".to_string(),
             },
@@ -176,6 +178,7 @@ mod tests {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
+            log_index: 1,
             payload: EventPayload::MetadataUpdated {
                 project_id: "proj-123".to_string(),
                 meta_ptr: MetaPtr {
@@ -197,6 +200,7 @@ mod tests {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
+            log_index: 1,
             payload: EventPayload::OwnerAdded {
                 project_id: "proj-123".to_string(),
                 owner: "0x123".to_string(),
@@ -215,6 +219,7 @@ mod tests {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
+            log_index: 1,
             payload: EventPayload::OwnerRemoved {
                 project_id: "proj-123".to_string(),
                 owner: "0x123".to_string(),
@@ -233,6 +238,7 @@ mod tests {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
+            log_index: 1,
             payload: EventPayload::RoundCreated {
                 round_address: "0x123".to_string(),
             },
@@ -252,6 +258,7 @@ mod tests {
                 chain_id: 1,
                 address: "0x123".to_string(),
                 block_number: 4242,
+                log_index: 1,
                 payload: EventPayload::ProjectCreated {
                     project_id: "proj-123".to_string(),
                 },
@@ -260,6 +267,7 @@ mod tests {
                 chain_id: 1,
                 address: "0x123".to_string(),
                 block_number: 4242,
+                log_index: 2,
                 payload: EventPayload::MetadataUpdated {
                     project_id: "proj-123".to_string(),
                     meta_ptr: MetaPtr {

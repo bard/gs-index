@@ -1,7 +1,7 @@
 #![allow(unused_imports, dead_code)]
 
 mod event_handling;
-mod event_log;
+mod event_source;
 mod indexer;
 mod ipfs;
 mod project;

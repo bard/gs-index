@@ -1,7 +1,7 @@
 use sea_query::{Expr, Iden, PostgresQueryBuilder, Query};
+use serde::{Deserialize, Serialize};
+use serde_json::{from_str, to_string};
 use tokio_postgres::{Client, Error, NoTls, Transaction};
-
-use crate::event_log::EventLog;
 
 // TODO add round table
 pub const DB_SCHEMA: &str = r#"
@@ -32,8 +32,9 @@ enum Round {
     CreatedAtBlock,
 }
 
-// TODO use stricter types
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Event {
+    // TODO use stricter types
     pub chain_id: i32,
     pub address: String,
     pub block_number: i32,
@@ -41,6 +42,7 @@ pub struct Event {
     pub payload: EventPayload,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum EventPayload {
     ProjectCreated {
         project_id: String,
@@ -62,6 +64,7 @@ pub enum EventPayload {
     },
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MetaPtr {
     pub pointer: String,
 }
@@ -152,7 +155,6 @@ pub async fn events_to_change_sets_sequential(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event_log::InMemoryEventLog;
 
     #[test]
     fn test_handle_project_created() {

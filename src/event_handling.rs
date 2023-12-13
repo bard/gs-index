@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use sea_query::{Expr, Iden, PostgresQueryBuilder, Query};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
@@ -33,33 +35,41 @@ enum Round {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Event {
     // TODO use stricter types
     pub chain_id: i32,
     pub address: String,
     pub block_number: i32,
     pub log_index: i32,
-    pub payload: EventPayload,
+    pub data: EventPayload,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
 pub enum EventPayload {
     ProjectCreated {
+        #[serde(rename = "projectID")]
         project_id: String,
     },
     MetadataUpdated {
+        #[serde(rename = "projectID")]
         project_id: String,
+        #[serde(rename = "metaPtr")]
         meta_ptr: MetaPtr,
     },
     OwnerAdded {
+        #[serde(rename = "projectID")]
         project_id: String,
         owner: String,
     },
     OwnerRemoved {
+        #[serde(rename = "projectID")]
         project_id: String,
         owner: String,
     },
     RoundCreated {
+        #[serde(rename = "roundAddress")]
         round_address: String,
     },
 }
@@ -69,14 +79,15 @@ pub struct MetaPtr {
     pub pointer: String,
 }
 
-pub type IpfsGetter = fn(&str) -> String;
-
 pub struct ChangeSet {
     pub sql: String,
 }
 
-pub fn event_to_changeset(event: &Event, ipfs: IpfsGetter) -> ChangeSet {
-    match &event.payload {
+pub async fn event_to_changeset(
+    event: &Event,
+    ipfs_getter: impl Fn(String) -> Pin<Box<dyn futures::Future<Output = String> + Send>>,
+) -> ChangeSet {
+    match &event.data {
         EventPayload::ProjectCreated { project_id } => ChangeSet {
             sql: Query::insert()
                 .into_table(Project::Table)
@@ -97,7 +108,7 @@ pub fn event_to_changeset(event: &Event, ipfs: IpfsGetter) -> ChangeSet {
             meta_ptr,
             project_id,
         } => {
-            let metadata = ipfs(&meta_ptr.pointer);
+            let metadata = ipfs_getter(meta_ptr.pointer.clone()).await;
             ChangeSet {
                 sql: Query::update()
                     .table(Project::Table)
@@ -142,159 +153,114 @@ pub fn event_to_changeset(event: &Event, ipfs: IpfsGetter) -> ChangeSet {
     }
 }
 
-pub async fn events_to_change_sets_sequential(
-    events: &[Event],
-    ipfs_getter: IpfsGetter,
-) -> Vec<ChangeSet> {
-    events
-        .iter()
-        .map(|event: &Event| -> ChangeSet { event_to_changeset(event, ipfs_getter) })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn dummy_ipfs_getter(_url: String) -> Pin<Box<dyn futures::Future<Output = String> + Send>> {
+        Box::pin(async move { r#"{ "foo": "bar" }"#.to_string() })
+    }
+
     #[test]
-    fn test_handle_project_created() {
+    fn test_parse_event_json() {
+        let event_data = r#"{"chainId":58008,"data":{"type":"ProjectCreated","projectID":"0x00","owner":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"},"address":"0x6294bed5B884Ae18bf737793Ef9415069Bf4bc11","signature":"ProjectCreated(uint256,address)","transactionHash":"0xdeae76e835f3d33f09c6e23b6ce5a831a6f8d314f4ac1823369f34b3bba0e0df","blockNumber":1070024,"logIndex":0}"#;
+        let event: Event = from_str(&event_data).unwrap();
+        assert_eq!(event.chain_id, 58008);
+        assert!(matches!(event.data, EventPayload::ProjectCreated { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_handle_project_created() {
         let event = Event {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
             log_index: 1,
-            payload: EventPayload::ProjectCreated {
+            data: EventPayload::ProjectCreated {
                 project_id: "proj-123".to_string(),
             },
         };
 
         assert_eq!(
-            event_to_changeset(&event, dummy_ipfs_getter).sql,
+            event_to_changeset(&event, dummy_ipfs_getter).await.sql,
             r#"INSERT INTO "project" ("chain_id", "project_id", "created_at_block") VALUES (1, 'proj-123', 4242)"#
         );
     }
 
-    #[test]
-    fn test_handle_metadata_updated() {
+    #[tokio::test]
+    async fn test_handle_metadata_updated() {
         let event = Event {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
             log_index: 1,
-            payload: EventPayload::MetadataUpdated {
+            data: EventPayload::MetadataUpdated {
                 project_id: "proj-123".to_string(),
                 meta_ptr: MetaPtr {
                     pointer: "123".to_string(),
                 },
             },
         };
-        let ipfs_getter = |_cid: &str| -> String { r#"{ "foo": "bar" }"#.to_string() };
 
         assert_eq!(
-            event_to_changeset(&event, ipfs_getter).sql,
+            event_to_changeset(&event, dummy_ipfs_getter).await.sql,
             r#"UPDATE "project" SET "metadata" = E'{ \"foo\": \"bar\" }' WHERE "chain_id" = 1 AND "project_id" = 'proj-123'"#
-        );
-    }
-
-    #[test]
-    fn test_handle_owner_added() {
-        let event = Event {
-            chain_id: 1,
-            address: "0x123".to_string(),
-            block_number: 4242,
-            log_index: 1,
-            payload: EventPayload::OwnerAdded {
-                project_id: "proj-123".to_string(),
-                owner: "0x123".to_string(),
-            },
-        };
-
-        assert_eq!(
-            event_to_changeset(&event, dummy_ipfs_getter).sql,
-            r#"UPDATE "project" SET "owners" = ("owners" || '["0x123"]') WHERE "chain_id" = 1 AND "project_id" = 'proj-123'"#
-        );
-    }
-
-    #[test]
-    fn test_handle_owner_removed() {
-        let event = Event {
-            chain_id: 1,
-            address: "0x123".to_string(),
-            block_number: 4242,
-            log_index: 1,
-            payload: EventPayload::OwnerRemoved {
-                project_id: "proj-123".to_string(),
-                owner: "0x123".to_string(),
-            },
-        };
-
-        assert_eq!(
-            event_to_changeset(&event, dummy_ipfs_getter).sql,
-            r#"UPDATE "project" SET "owners" = ("owners" - '0x123') WHERE "chain_id" = 1 AND "project_id" = 'proj-123'"#
-        );
-    }
-
-    #[test]
-    fn test_handle_contract_round_created() {
-        let event = Event {
-            chain_id: 1,
-            address: "0x123".to_string(),
-            block_number: 4242,
-            log_index: 1,
-            payload: EventPayload::RoundCreated {
-                round_address: "0x123".to_string(),
-            },
-        };
-
-        let ChangeSet { sql } = event_to_changeset(&event, dummy_ipfs_getter);
-        assert_eq!(
-            sql,
-            r#"INSERT INTO "round" ("chain_id", "round_address", "created_at_block") VALUES (1, '0x123', 4242)"#
         );
     }
 
     #[tokio::test]
-    async fn test_events_to_change_sets_sequential() -> Result<(), Error> {
-        let events = vec![
-            Event {
-                chain_id: 1,
-                address: "0x123".to_string(),
-                block_number: 4242,
-                log_index: 1,
-                payload: EventPayload::ProjectCreated {
-                    project_id: "proj-123".to_string(),
-                },
+    async fn test_handle_owner_added() {
+        let event = Event {
+            chain_id: 1,
+            address: "0x123".to_string(),
+            block_number: 4242,
+            log_index: 1,
+            data: EventPayload::OwnerAdded {
+                project_id: "proj-123".to_string(),
+                owner: "0x123".to_string(),
             },
-            Event {
-                chain_id: 1,
-                address: "0x123".to_string(),
-                block_number: 4242,
-                log_index: 2,
-                payload: EventPayload::MetadataUpdated {
-                    project_id: "proj-123".to_string(),
-                    meta_ptr: MetaPtr {
-                        pointer: "123".to_string(),
-                    },
-                },
-            },
-        ];
-
-        let ipfs_getter = |_cid: &str| -> String { "{ \"foo\": \"bar\" }".to_string() };
-        let change_sets = events_to_change_sets_sequential(&events, ipfs_getter).await;
+        };
 
         assert_eq!(
-            change_sets[0].sql,
-            r#"INSERT INTO "project" ("chain_id", "project_id", "created_at_block") VALUES (1, 'proj-123', 4242)"#
+            event_to_changeset(&event, dummy_ipfs_getter).await.sql,
+            r#"UPDATE "project" SET "owners" = ("owners" || '["0x123"]') WHERE "chain_id" = 1 AND "project_id" = 'proj-123'"#
         );
-        assert_eq!(
-            change_sets[1].sql,
-            r#"UPDATE "project" SET "metadata" = E'{ \"foo\": \"bar\" }' WHERE "chain_id" = 1 AND "project_id" = 'proj-123'"#
-        );
-
-        Ok(())
     }
 
-    fn dummy_ipfs_getter(_cid: &str) -> String {
-        "".to_string()
+    #[tokio::test]
+    async fn test_handle_owner_removed() {
+        let event = Event {
+            chain_id: 1,
+            address: "0x123".to_string(),
+            block_number: 4242,
+            log_index: 1,
+            data: EventPayload::OwnerRemoved {
+                project_id: "proj-123".to_string(),
+                owner: "0x123".to_string(),
+            },
+        };
+
+        assert_eq!(
+            event_to_changeset(&event, dummy_ipfs_getter).await.sql,
+            r#"UPDATE "project" SET "owners" = ("owners" - '0x123') WHERE "chain_id" = 1 AND "project_id" = 'proj-123'"#
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_contract_round_created() {
+        let event = Event {
+            chain_id: 1,
+            address: "0x123".to_string(),
+            block_number: 4242,
+            log_index: 1,
+            data: EventPayload::RoundCreated {
+                round_address: "0x123".to_string(),
+            },
+        };
+
+        assert_eq!(
+            event_to_changeset(&event, dummy_ipfs_getter).await.sql,
+            r#"INSERT INTO "round" ("chain_id", "round_address", "created_at_block") VALUES (1, '0x123', 4242)"#
+        );
     }
 }

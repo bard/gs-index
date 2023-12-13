@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "4.0", features = ["derive"] } 
 chrono = "0.4.31"
 ethers = { version = "2.0.1", default-features = false, features = ["abigen", "ethers-solc", "eip712", "rustls", "legacy"] }
 eyre = "0.6.8"
@@ -13,7 +14,7 @@ tokio = { version = "1.33.0", features = ["full"] }
 sea-orm = { version = "^0.12.0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
 sqlx = { version = "0.7", features = [ "runtime-tokio", "tls-rustls" ] }
 serde = "1.0.193"
-reqwest = "0.11.22"
+reqwest = { version = "0.11.22", features = [ "blocking" ] }
 rayon = "1.8.0"
 futures = "0.3.29"
 sea-query = { version = "0.30.4", features = [ "with-json" ] }

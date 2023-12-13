@@ -1,8 +1,7 @@
 use std::pin::Pin;
 
 use crate::event_handling::{
-    event_to_changeset, events_to_change_sets_sequential, ChangeSet, Event, EventPayload,
-    IpfsGetter, MetaPtr, DB_SCHEMA,
+    event_to_changeset, ChangeSet, Event, EventPayload, MetaPtr, DB_SCHEMA,
 };
 use async_stream::stream;
 use futures::pin_mut;
@@ -18,32 +17,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_created() {
-        let ipfs_getter = |_cid: &str| -> String { "".to_string() };
         let events = vec![Event {
             chain_id: 1,
             address: "0x123".to_string(),
             block_number: 4242,
             log_index: 1,
-            payload: EventPayload::ProjectCreated {
+            data: EventPayload::ProjectCreated {
                 project_id: "proj-123".to_string(),
             },
         }];
 
-        let db_dump = event_stream_to_db_dump(events, ipfs_getter).await.unwrap();
+        let db_dump = event_stream_to_db_dump(events).await.unwrap();
 
         insta::assert_yaml_snapshot!(db_dump);
     }
 
     #[tokio::test]
     async fn test_project_created_and_metadata_updated() {
-        let ipfs_getter = |_cid: &str| -> String { "{ \"foo\": \"bar\" }".to_string() };
         let events = vec![
             Event {
                 chain_id: 1,
                 address: "0x123".to_string(),
                 block_number: 4242,
                 log_index: 1,
-                payload: EventPayload::ProjectCreated {
+                data: EventPayload::ProjectCreated {
                     project_id: "proj-123".to_string(),
                 },
             },
@@ -52,7 +49,7 @@ mod tests {
                 address: "0x123".to_string(),
                 block_number: 4242,
                 log_index: 2,
-                payload: EventPayload::MetadataUpdated {
+                data: EventPayload::MetadataUpdated {
                     project_id: "proj-123".to_string(),
                     meta_ptr: MetaPtr {
                         pointer: "123".to_string(),
@@ -61,19 +58,16 @@ mod tests {
             },
         ];
 
-        let db_dump = event_stream_to_db_dump(events, ipfs_getter).await.unwrap();
+        let db_dump = event_stream_to_db_dump(events).await.unwrap();
 
         insta::assert_yaml_snapshot!(db_dump);
     }
 
-    fn dummy_ipfs_getter(_cid: &str) -> String {
-        "".into()
+    fn dummy_ipfs_getter(_url: String) -> Pin<Box<dyn futures::Future<Output = String> + Send>> {
+        Box::pin(async move { r#"{ "foo": "bar" }"#.to_string() })
     }
 
-    async fn event_stream_to_db_dump(
-        events: Vec<Event>,
-        ipfs_getter: IpfsGetter,
-    ) -> Result<String, Error> {
+    async fn event_stream_to_db_dump(events: Vec<Event>) -> Result<String, Error> {
         let connection_string = "host=localhost user=postgres password=postgres";
         let (mut client, connection) = tokio_postgres::connect(connection_string, NoTls).await?;
         tokio::spawn(connection);
@@ -84,7 +78,7 @@ mod tests {
         pin_mut!(event_stream);
 
         while let Some((event, _index)) = event_stream.next().await {
-            let change_set = event_to_changeset(&event, ipfs_getter);
+            let change_set = event_to_changeset(&event, dummy_ipfs_getter).await;
             transaction.simple_query(&change_set.sql).await?;
         }
 

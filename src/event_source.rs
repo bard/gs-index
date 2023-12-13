@@ -28,24 +28,45 @@ pub fn event_stream_from_vector(
 pub fn event_stream_from_ndjson_file(
     file: File,
     start: usize,
+    warn_on_unparseable_items: bool,
 ) -> impl Stream<Item = (Event, usize)> {
-    event_stream_from_buf_reader(io::BufReader::new(file), start)
+    event_stream_from_buf_reader(io::BufReader::new(file), start, warn_on_unparseable_items)
 }
 
-pub fn event_stream_from_ndjson_stdin(start: usize) -> impl Stream<Item = (Event, usize)> {
-    event_stream_from_buf_reader(io::BufReader::new(io::stdin()), start)
+pub fn event_stream_from_ndjson_stdin(
+    start: usize,
+    warn_on_unparseable_items: bool,
+) -> impl Stream<Item = (Event, usize)> {
+    event_stream_from_buf_reader(
+        io::BufReader::new(io::stdin()),
+        start,
+        warn_on_unparseable_items,
+    )
 }
 
 pub fn event_stream_from_buf_reader<R: io::BufRead>(
     reader: R,
     start: usize,
+    warn_on_unparseable_items: bool,
 ) -> impl Stream<Item = (Event, usize)> {
     let mut index = 0;
     stream! {
         for line in reader.lines() {
             if index >= start {
-                let event: Event = from_str(&line.unwrap()).unwrap();
-                yield (event, index);
+                let line_content = line.unwrap();
+                let parse_result: Result<Event, _>  = serde_json::from_str(&line_content);
+                match parse_result {
+                    Ok(event) => {
+                        yield (event, index);
+                    }
+                    Err(err) => {
+                        // TODO propagate error instead of panicking. Might need to
+                        // use try_stream!
+                        if warn_on_unparseable_items {
+                            eprintln!("Warning: skipping event due to parse error: {}. Data: {}", err, line_content);
+                        }
+                    }
+                }
             }
             index += 1;
         }
@@ -69,7 +90,8 @@ mod tests {
         }
         let file_name = tmp_file.path();
 
-        let file_event_source = event_stream_from_ndjson_file(File::open(file_name).unwrap(), 0);
+        let file_event_source =
+            event_stream_from_ndjson_file(File::open(file_name).unwrap(), 0, false);
         pin_mut!(file_event_source);
 
         let (event, index) = file_event_source.next().await.unwrap();
@@ -114,7 +136,7 @@ mod tests {
                 address: "0x123".to_string(),
                 block_number: 10,
                 log_index: 0,
-                payload: EventPayload::ProjectCreated {
+                data: EventPayload::ProjectCreated {
                     project_id: "proj-123".to_string(),
                 },
             },
@@ -123,7 +145,7 @@ mod tests {
                 address: "0x123".to_string(),
                 block_number: 20,
                 log_index: 1,
-                payload: EventPayload::MetadataUpdated {
+                data: EventPayload::MetadataUpdated {
                     project_id: "proj-123".to_string(),
                     meta_ptr: MetaPtr {
                         pointer: "123".to_string(),
@@ -135,7 +157,7 @@ mod tests {
                 address: "0x123".to_string(),
                 block_number: 30,
                 log_index: 1,
-                payload: EventPayload::OwnerAdded {
+                data: EventPayload::OwnerAdded {
                     project_id: "proj-123".to_string(),
                     owner: "0x123".to_string(),
                 },

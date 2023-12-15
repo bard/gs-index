@@ -35,3 +35,31 @@ $ cat event_ndjson | \
   gs-index | \
   psql mydb
 ```
+
+## Status
+
+Work in progress. Event support:
+
+- [x] ProjectCreated
+- [x] MetadataUpdated
+- [x] OwnerAdded
+- [x] OwnerRemoved
+- [x] RoundCreated
+- [x] NewProjectApplication
+- [ ] ProjectCreated
+- [ ] MetadataUpdated
+- [ ] OwnerAdded
+- [ ] OwnerRemoved
+- [ ] RoundCreated
+- [ ] RoundCreated
+- [ ] MatchAmountUpdated
+- [ ] RoundMetaPtrUpdated
+- [ ] ApplicationMetaPtrUpdated
+- [ ] NewProjectApplication
+- [ ] ProjectsMetaPtrUpdated
+- [ ] ApplicationStatusesUpdated
+- [ ] VotingContractCreatedV1
+- [ ] VotingContractCreated
+- [ ] Voted
+- [ ] PayoutContractCreated
+- [ ] ApplicationInReviewUpdated

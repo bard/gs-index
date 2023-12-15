@@ -24,7 +24,14 @@ $ gs-log --chains 58008:origin..ongoing | gs-index | psql mydb
 Index historical plus live data and keep a log to easily resume in case of interruption:
 
 ```sh
-$ gs-log --chains 58008:origin..ongoing | tee -a event_ndjson.log | gs-index | psql mydb
+$ gs-log --chains 58008:origin..ongoing | \
+  tee -a event_ndjson.log | \
+  gs-index | \
+  psql mydb
 # ... later ...
-$ cat event_ndjson | gs-log --resume | tee -a event_ndjson.log | gs-index | psql mydb
+$ cat event_ndjson | \
+  gs-log --resume | \
+  tee -a event_ndjson.log | \
+  gs-index | \
+  psql mydb
 ```

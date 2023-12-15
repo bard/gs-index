@@ -7,13 +7,8 @@ use tokio_postgres::{Client, Error, NoTls, Transaction};
 
 // TODO add round table
 pub const DB_SCHEMA: &str = r#"
-   CREATE TABLE project (
-     chain_id INTEGER NOT NULL,
-     project_id VARCHAR NOT NULL,
-     created_at_block BIGINT NOT NULL,
-     metadata JSONB,
-     PRIMARY KEY(chain_id, project_id)
-   );
+CREATE TABLE project (chain_id INTEGER NOT NULL, project_id VARCHAR NOT NULL, created_at_block BIGINT NOT NULL, metadata JSONB, PRIMARY KEY(chain_id, project_id));
+CREATE TABLE round (chain_id INTEGER NOT NULL, round_address VARCHAR NOT NULL, created_at_block BIGINT NOT NULL);
 "#;
 
 #[derive(Iden)]

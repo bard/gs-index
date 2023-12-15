@@ -1,6 +1,6 @@
 #![allow(unused_imports, dead_code)]
 
-use crate::event_handling::event_to_changeset;
+use crate::event_handling::{event_to_changeset, DB_SCHEMA};
 use crate::event_source::event_stream_from_ndjson_stdin;
 use clap::Parser;
 use futures::pin_mut;
@@ -19,6 +19,8 @@ struct Args {
     /// Display warnings for parse errors
     #[arg(long, default_value_t = false)]
     show_warnings: bool,
+    #[arg(long, default_value_t = false)]
+    create_tables: bool,
 }
 
 const IPFS_GATEWAY: &str = "https://d16c97c2np8a2o.cloudfront.net/ipfs/";
@@ -35,9 +37,13 @@ async fn main() -> Result<(), io::Error> {
     let event_stream = event_stream_from_ndjson_stdin(0, args.show_warnings);
     pin_mut!(event_stream);
 
+    if args.create_tables {
+        println!("{}", DB_SCHEMA);
+    }
+
     while let Some((event, _index)) = event_stream.next().await {
         let change_set = event_to_changeset(&event, |cid: String| Box::pin(ipfs_getter(cid))).await;
-        println!("{}", change_set.sql);
+        println!("{};", change_set.sql);
     }
 
     Ok(())

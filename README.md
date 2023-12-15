@@ -7,6 +7,10 @@ Command-line indexer for [Allo (v1)](https://github.com/gitcoinco/grants-stack-a
 - accepts events as JSON on stdin for easy composition: file, network, direct pipe from [gs-log](https://github.com/bard/gs-log), etc
 - outputs SQL (Postgres dialect)
 
+## Download
+
+Download the binary for your platform from [Releases](https://github.com/bard/gs-index/releases).
+
 ## Examples
 
 Index historical data into a local database:

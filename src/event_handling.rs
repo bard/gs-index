@@ -29,6 +29,22 @@ enum Round {
     CreatedAtBlock,
 }
 
+#[derive(Iden)]
+enum Application {
+    Table,
+    ChainId,
+    CreatedAtBlock,
+    StatusUpdatedAtBlock,
+    ProjectId,
+    Index,
+    RoundAddress,
+    Status,
+    VoteCount,
+    UniqueContributorCount,
+    Metadata,
+    StatusSnapshots,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
@@ -66,6 +82,13 @@ pub enum EventPayload {
     RoundCreated {
         #[serde(rename = "roundAddress")]
         round_address: String,
+    },
+    NewProjectApplication {
+        // TODO verify if the variant "project" should be supported
+        #[serde(rename = "projectID")]
+        project_id: String,
+        #[serde(rename = "applicationIndex")]
+        application_index: i32,
     },
 }
 
@@ -142,6 +165,41 @@ pub async fn event_to_changeset(
                     event.chain_id.into(),
                     round_address.into(),
                     event.block_number.into(),
+                ])
+                .to_string(PostgresQueryBuilder),
+        },
+
+        EventPayload::NewProjectApplication {
+            project_id,
+            application_index,
+        } => ChangeSet {
+            sql: Query::insert()
+                .into_table(Application::Table)
+                .columns([
+                    Application::ChainId,
+                    Application::CreatedAtBlock,
+                    Application::StatusUpdatedAtBlock,
+                    Application::ProjectId,
+                    Application::Index,
+                    Application::RoundAddress,
+                    Application::Status,
+                    Application::VoteCount,
+                    Application::UniqueContributorCount,
+                    //Application::Metadata,
+                    //Application::StatusSnapshots,
+                ])
+                .values_panic([
+                    event.chain_id.into(),
+                    event.block_number.into(),
+                    event.block_number.into(),
+                    project_id.into(),
+                    application_index.to_owned().into(),
+                    event.address.to_owned().into(),
+                    "PENDING".into(),
+                    0.into(),
+                    0.into(),
+                    //None,
+                    //TODO should be [{status: "PENDING",statusUpdatedAtBlock: event.blockNumber}]
                 ])
                 .to_string(PostgresQueryBuilder),
         },
@@ -256,6 +314,25 @@ mod tests {
         assert_eq!(
             event_to_changeset(&event, dummy_ipfs_getter).await.sql,
             r#"INSERT INTO "round" ("chain_id", "round_address", "created_at_block") VALUES (1, '0x123', 4242)"#
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_new_project_application() {
+        let event = Event {
+            chain_id: 1,
+            address: "0x123".to_string(),
+            block_number: 4242,
+            log_index: 1,
+            data: EventPayload::NewProjectApplication {
+                project_id: "0x456".to_string(),
+                application_index: 0,
+            },
+        };
+
+        assert_eq!(
+            event_to_changeset(&event, dummy_ipfs_getter).await.sql,
+            r#"INSERT INTO "application" ("chain_id", "created_at_block", "status_updated_at_block", "project_id", "index", "round_address", "status", "vote_count", "unique_contributor_count") VALUES (1, 4242, 4242, '0x456', 0, '0x123', 'PENDING', 0, 0)"#
         );
     }
 }

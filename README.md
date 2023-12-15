@@ -1,6 +1,6 @@
 # gs-index
 
-Command-line indexer for [Allo (v1)](https://github.com/gitcoinco/grants-stack-allo-contracts-v1) events. Built for Gitcoin's December 2023 hackathon ([presentation](https://github.com/bard/gitcoin-hackathon-2023-presentation)). Companion to [gs-log](https://github.com/bard/gs-log).
+Command-line indexer for [Allo (v1)](https://github.com/gitcoinco/grants-stack-allo-contracts-v1) events. Built for Gitcoin's December 2023 hackathon ([presentation](https://bard.github.io/gitcoin-hackathon-2023-presentation/)). Companion to [gs-log](https://github.com/bard/gs-log).
 
 ## Features
 

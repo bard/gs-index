@@ -1,7 +1,6 @@
 ---
-source: src/event_handling.rs
-assertion_line: 221
-expression: value
+source: src/indexer.rs
+expression: db_dump
 ---
 "[{\"chain_id\":1,\"project_id\":\"proj-123\",\"created_at_block\":4242,\"metadata\":null}]"
 

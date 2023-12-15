@@ -40,6 +40,16 @@ $ cat event_ndjson | \
   psql mydb
 ```
 
+## Development
+
+Running tests in watch mode:
+
+```sh
+# start db for integration tesnts
+$ docker-compose up -d
+$ cargo watch --watch src --ignore snapshots --clear -x test
+```
+
 ## Status
 
 Work in progress. Event support:
